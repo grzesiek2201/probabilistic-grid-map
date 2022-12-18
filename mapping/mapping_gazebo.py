@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 from rclpy.node import Node
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float64MultiArray
 
 
 # def quaternion_from_euler(roll, pitch, yaw):
@@ -127,12 +127,14 @@ class SubscriberNode(Node):
 class MapPublisher(Node):
     def __init__(self, name):
         super().__init__(name)
-        self.publisher = self.create_publisher(Float32MultiArray, 'map', 10)
+        self.publisher = self.create_publisher(Float64MultiArray, 'map', 10)
     
     def publish_callback(self, data):
-        msg = Float32MultiArray()
-        print(type(data.flatten()[0]))  # IT'S A 2D ARRAY, NOT A 1D ARRAY
-        msg.data = (data.flatten())
+        msg = Float64MultiArray()
+        data = data.flatten()
+        converted_data = getattr(data, "tolist", lambda: data)()
+        print(type(converted_data))
+        msg.data = (converted_data)
         self.publisher.publish(msg)
 
 
