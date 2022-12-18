@@ -9,25 +9,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 from rclpy.node import Node
+from std_msgs.msg import Float32MultiArray
 
 
-def quaternion_from_euler(roll, pitch, yaw):
-    """
-    Converts euler roll, pitch, yaw to quaternion
-    """
-    cy = math.cos(yaw * 0.5)
-    sy = math.sin(yaw * 0.5)
-    cp = math.cos(pitch * 0.5)
-    sp = math.sin(pitch * 0.5)
-    cr = math.cos(roll * 0.5)
-    sr = math.sin(roll * 0.5)
+# def quaternion_from_euler(roll, pitch, yaw):
+#     """
+#     Converts euler roll, pitch, yaw to quaternion
+#     """
+#     cy = math.cos(yaw * 0.5)
+#     sy = math.sin(yaw * 0.5)
+#     cp = math.cos(pitch * 0.5)
+#     sp = math.sin(pitch * 0.5)
+#     cr = math.cos(roll * 0.5)
+#     sr = math.sin(roll * 0.5)
 
-    q = Quaternion()
-    q.w = cy * cp * cr + sy * sp * sr
-    q.x = cy * cp * sr - sy * sp * cr
-    q.y = sy * cp * sr + cy * sp * cr
-    q.z = sy * cp * cr - cy * sp * sr
-    return q 
+#     q = Quaternion()
+#     q.w = cy * cp * cr + sy * sp * sr
+#     q.x = cy * cp * sr - sy * sp * cr
+#     q.y = sy * cp * sr + cy * sp * cr
+#     q.z = sy * cp * cr - cy * sp * sr
+#     return q 
 
 def euler_from_quaternion(quaternion):
     """
@@ -70,7 +71,12 @@ class Mapper:
         plt.pause(0.1)
 
         self.update_node = SubscriberNode("mapper", self)
+        self.map_node = MapPublisher("map_publisher")
         rclpy.spin(self.update_node)
+        rclpy.spin(self.map_node)
+
+    def __del__(self):
+        self.map_node.destroy_node()
 
     def callback_scan(self, msg):
         self.scan = msg.ranges
@@ -86,6 +92,7 @@ class Mapper:
         if self.scan is None:
             return
         self.map.live_update_map(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
+        self.map_node.publish_callback(1.0 - 1./(1.+np.exp(self.map.odds_map)))
         plt.clf()
         plt.imshow(1.0 - 1./(1.+np.exp(self.map.odds_map)), 'Greys')
         plt.pause(0.01)
@@ -115,6 +122,19 @@ class SubscriberNode(Node):
 
     def callback_odom(self, msg):
         self.parent.callback_update(msg)
+
+
+class MapPublisher(Node):
+    def __init__(self, name):
+        super().__init__(name)
+        self.publisher = self.create_publisher(Float32MultiArray, 'map', 10)
+    
+    def publish_callback(self, data):
+        msg = Float32MultiArray()
+        print(type(data.flatten()[0]))  # IT'S A 2D ARRAY, NOT A 1D ARRAY
+        msg.data = (data.flatten())
+        self.publisher.publish(msg)
+
 
 if __name__ == '__main__':
     rclpy.init()

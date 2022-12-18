@@ -21,7 +21,7 @@ class OccupancyGridMap:
         self.yrange = [yrange[0], yrange[1]]
         self.grid_size = grid_size
         self.odds_map = np.zeros((int((self.xrange[1]-self.xrange[0])/self.grid_size)+1, 
-                                  int((self.yrange[1]-self.yrange[0])/self.grid_size)+1))
+                                  int((self.yrange[1]-self.yrange[0])/self.grid_size)+1), dtype=np.float32)
         
         self.n_beams = n_beams
         self.z_max = 3.4#z_max
