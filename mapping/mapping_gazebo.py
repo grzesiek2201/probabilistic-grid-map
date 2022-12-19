@@ -81,17 +81,17 @@ class Mapper:
     def callback_scan(self, msg):
         self.scan = msg.ranges
 
-
     def callback_update(self, msg):
         # self.update_node.get_logger().info("update_node callback")
         self.pose["x"] = msg.pose.pose.position.x
         self.pose["y"] = msg.pose.pose.position.y
         quaternions = msg.pose.pose.orientation
         euler = euler_from_quaternion(quaternions)
-        self.pose["theta"] = euler[2]
+        self.pose["theta"] = euler[2] * 180.0 / np.pi
         if self.scan is None:
             return
-        self.map.live_update_map(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
+        # self.map.live_update_map(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
+        self.map.update(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
         self.map_node.publish_callback(1.0 - 1./(1.+np.exp(self.map.odds_map)))
         plt.clf()
         plt.imshow(1.0 - 1./(1.+np.exp(self.map.odds_map)), 'Greys')
@@ -133,13 +133,12 @@ class MapPublisher(Node):
         msg = Float64MultiArray()
         data = data.flatten()
         converted_data = getattr(data, "tolist", lambda: data)()
-        print(type(converted_data))
         msg.data = (converted_data)
         self.publisher.publish(msg)
 
 
 if __name__ == '__main__':
     rclpy.init()
-    mapper = Mapper(map_size=[[-10, 10], [-10, 10]], grid_size=0.1, z_max=5, n_beams=360, angle_range=[0, 2*np.pi],
+    mapper = Mapper(map_size=[[-10, 10], [-10, 10]], grid_size=0.05, z_max=3.4, n_beams=360, angle_range=[0, 2*np.pi],
                     p_occ=0.9, p_free=0.4)
     
