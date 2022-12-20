@@ -114,10 +114,7 @@ class OccupancyGridMap:
         dist_to_grid = np.linalg.norm(dx, axis=0) # matrix of L2 distance to all cells from robot
 
         angle_measured = np.linspace(self.angle_range[0], self.angle_range[1], self.n_beams)
-        print(scan_data.shape)
-        print(angle_measured.shape)
         for scan in zip(scan_data, angle_measured):  # for each laser beam
-            print("iteration")
             z = scan[0]
             b = scan[1] 
             free_mask = (np.abs(theta_to_grid - b) <= self.beta/2.0) & (dist_to_grid < (z - self.alpha/2.0))
@@ -134,32 +131,23 @@ class OccupancyGridMap:
     @timeit
     def update(self, pose, scan_data):
 
-        # self.angle_range = [-np.pi/2, np.pi/2]
-
         scan_data = self.sanitize(scan_data)
-        # print(pose[2])
         pose[2] = pose[2] * np.pi / 180.0  # from deg to radian
-        # if pose[2] > np.pi: pose[2] -= 2*np.pi
-        # if pose[2] <= -np.pi: pose[2] += 2*np.pi
         pose[2] = pose[2] % (2*np.pi)  # from -pi, pi to 0, 2pi
-        # print(pose[2])
         pose = scaner_pos_correction(pose, self.sensor_offset)
         
         angle_measured = np.linspace(self.angle_range[0], self.angle_range[1], self.n_beams)
-        # angle_measured = angle_measured % (2*np.pi)
         idc = scan_data < self.z_max
         angle_measured = angle_measured[idc]
         scan_data = scan_data[idc]
 
         points_measured = [np.cos(angle_measured) * (scan_data / self.grid_size), np.sin(angle_measured) * (scan_data / self.grid_size)]
-        # points_measured = np.vstack((points_measured[0], points_measured[1]))
         rot_z = [[np.cos(pose[2]), -np.sin(pose[2])], [np.sin(pose[2]), np.cos(pose[2])]]
         points_measured = np.round(np.matmul(rot_z, points_measured)).astype(int)
         points_measured[0] += (pose[0] / self.grid_size).astype(int)
         points_measured[1] += (pose[1] / self.grid_size).astype(int)
 
         for point in zip(points_measured[0], points_measured[1]):  # for each laser beam
-            # print("iteration")
             x_robot = np.round(pose[0] / self.grid_size).astype(int)
             y_robot = np.round(pose[1] / self.grid_size ).astype(int)
             line = list(bresenham(x_robot, y_robot, point[0], point[1]))
@@ -168,8 +156,6 @@ class OccupancyGridMap:
 
             self.odds_map[ix[:-1], iy[:-1]] += self.l_free
             self.odds_map[ix[-2:], iy[-2:]] += self.l_occ
-            # print(line)
-
 
 
 def scaner_pos_correction(middle_position:np.ndarray, offset:np.ndarray) -> np.ndarray:

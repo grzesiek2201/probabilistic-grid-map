@@ -10,7 +10,7 @@ import numpy as np
 import math
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
-
+from tf2_msgs.msg import TFMessage
 
 # def quaternion_from_euler(roll, pitch, yaw):
 #     """
@@ -80,29 +80,31 @@ class Mapper:
 
     def callback_scan(self, msg):
         self.scan = msg.ranges
+        if len(self.pose) != 0:
+            # self.map.live_update_map(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
+            self.map.update(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
+            self.map_node.publish_callback(1.0 - 1./(1.+np.exp(self.map.odds_map)))
+            plt.clf()
+            plt.imshow(1.0 - 1./(1.+np.exp(self.map.odds_map)), 'Greys')
+            plt.pause(0.01)
 
     def callback_update(self, msg):
         # self.update_node.get_logger().info("update_node callback")
         self.pose["x"] = msg.pose.pose.position.x
         self.pose["y"] = msg.pose.pose.position.y
         quaternions = msg.pose.pose.orientation
+        # self.pose["x"] = msg.transforms[0].transform.translation.x
+        # self.pose["y"] = msg.transforms[0].transform.translation.y
+        # quaternions = msg.transforms[0].transform.rotation
         euler = euler_from_quaternion(quaternions)
         self.pose["theta"] = euler[2] * 180.0 / np.pi
-        if self.scan is None:
-            return
-        # self.map.live_update_map(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
-        self.map.update(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
-        self.map_node.publish_callback(1.0 - 1./(1.+np.exp(self.map.odds_map)))
-        plt.clf()
-        plt.imshow(1.0 - 1./(1.+np.exp(self.map.odds_map)), 'Greys')
-        plt.pause(0.01)
+        # print(self.pose)
 
 
 class ScanNode(Node):
-    
     def __init__(self, name, parent):
         super().__init__(name)
-        self.subscription_scan = self.create_subscription(LaserScan, "/scan", self.callback_scan, 10)
+        self.subscription_scan = self.create_subscription(LaserScan, "/scan", self.callback_scan, 1)
         self.parent = parent
 
     def callback_scan(self, msg):
@@ -113,8 +115,10 @@ class SubscriberNode(Node):
     
     def __init__(self, name, parent):
         super().__init__(name)
-        self.subscription_scan = self.create_subscription(LaserScan, "/scan", self.callback_scan, 10)
-        self.subscription_pose = self.create_subscription(Odometry, "/odom", self.callback_odom, 10)
+        self.subscription_scan = self.create_subscription(LaserScan, "/scan", self.callback_scan, 1)
+        # self.subscription_pose = self.create_subscription(Odometry, "/odom", self.callback_odom, 1)
+        # self.subscription_pose = self.create_subscription(TFMessage, "/tf", self.callback_odom, 1)
+        self.subscription_pose = self.create_subscription(Odometry, "/ground_truth_pos", self.callback_odom, 1)
         self.parent = parent
 
     def callback_scan(self, msg):
