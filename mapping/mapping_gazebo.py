@@ -4,7 +4,7 @@ import rclpy
 import json
 from mapping import OccupancyGridMap
 from sensor_msgs.msg import LaserScan
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 import matplotlib.pyplot as plt
 import numpy as np
 import math
@@ -12,23 +12,10 @@ from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from tf2_msgs.msg import TFMessage
 
-# def quaternion_from_euler(roll, pitch, yaw):
-#     """
-#     Converts euler roll, pitch, yaw to quaternion
-#     """
-#     cy = math.cos(yaw * 0.5)
-#     sy = math.sin(yaw * 0.5)
-#     cp = math.cos(pitch * 0.5)
-#     sp = math.sin(pitch * 0.5)
-#     cr = math.cos(roll * 0.5)
-#     sr = math.sin(roll * 0.5)
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 
-#     q = Quaternion()
-#     q.w = cy * cp * cr + sy * sp * sr
-#     q.x = cy * cp * sr - sy * sp * cr
-#     q.y = sy * cp * sr + cy * sp * cr
-#     q.z = sy * cp * cr - cy * sp * sr
-#     return q 
 
 def euler_from_quaternion(quaternion):
     """
@@ -60,9 +47,15 @@ class Mapper:
                  sensor_offset: list = [0, 0], n_beams: int = 360, angle_range: list = [0, 2*np.pi],
                  p_occ: float = 0.9, p_free: float = 0.4) -> None:
                  
+        self.frame_id = "map"
+
         self.map = OccupancyGridMap(xrange=map_size[0], yrange=map_size[1], grid_size=grid_size, 
                                     z_max=z_max, sensor_offset=sensor_offset, n_beams=n_beams,
                                      angle_range=angle_range, p_occ=p_occ, p_free=p_free)
+
+        self.xrange = map_size[0]
+        self.yrange = map_size[1]
+        self.grid_size = grid_size
 
         self.scan = None
         self.pose = {}
@@ -72,6 +65,9 @@ class Mapper:
 
         self.update_node = SubscriberNode("mapper", self)
         self.map_node = MapPublisher("map_publisher")
+        # self.tf_sub = FrameListener("frame_listener")
+        # rclpy.spin(self.tf_sub)
+        # rclpy.spin_once(self.tf_sub)
         rclpy.spin(self.update_node)
         rclpy.spin(self.map_node)
 
@@ -80,10 +76,22 @@ class Mapper:
 
     def callback_scan(self, msg):
         self.scan = msg.ranges
+
+        # t = self.tf_sub.on_call('odom', 'base_footprint')
+
+        # if t is not None:
+        #     self.pose["x"] = t.transform.translation.x
+        #     self.pose["y"] = t.transform.translation.y
+        #     quaternions = t.transform.rotation
+        #     euler = euler_from_quaternion(quaternions)
+        #     self.pose["theta"] = euler[2] * 180.0 / np.pi
+
         if len(self.pose) != 0:
             # self.map.live_update_map(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
             self.map.update(np.array([self.pose["x"], self.pose["y"], self.pose["theta"]]), np.array(self.scan))
-            self.map_node.publish_callback(1.0 - 1./(1.+np.exp(self.map.odds_map)))
+            width = (abs(self.xrange[1]) + abs(self.xrange[0])) / self.grid_size
+            height = (abs(self.yrange[1]) + abs(self.yrange[0])) / self.grid_size
+            self.map_node.publish_callback(1.0 - 1./(1.+np.exp(self.map.odds_map)), self.frame_id, width, height, self.grid_size)
             plt.clf()
             plt.imshow(1.0 - 1./(1.+np.exp(self.map.odds_map)), 'Greys')
             plt.pause(0.01)
@@ -131,18 +139,48 @@ class SubscriberNode(Node):
 class MapPublisher(Node):
     def __init__(self, name):
         super().__init__(name)
-        self.publisher = self.create_publisher(Float64MultiArray, 'map', 10)
-    
-    def publish_callback(self, data):
-        msg = Float64MultiArray()
-        data = data.flatten()
-        converted_data = getattr(data, "tolist", lambda: data)()
-        msg.data = (converted_data)
+        # self.publisher = self.create_publisher(Float64MultiArray, '/map', 10)
+        self.publisher = self.create_publisher(OccupancyGrid, 'map', 5)
+
+    def publish_callback(self, data, frame_id, width=400, height=400, grid_size=0.05):
+        msg = OccupancyGrid()
+        data = data.flatten().astype(np.int8)
+        data = np.round(data) * 100
+        data = getattr(data, 'tolist', lambda:data)()
+        msg.data = data
+
+        print(len(msg.data))
+
+        msg.header.frame_id = str(frame_id)
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.info.resolution = float(grid_size)
+        msg.info.width = int(width)
+        msg.info.height = int(height)
+        msg.info.origin.position.x = -(width / 2) * grid_size
+        msg.info.origin.position.y = -(height / 2) * grid_size
+
         self.publisher.publish(msg)
+
+
+class FrameListener(Node):
+    def __init__(self, name):
+        super().__init__(name)
+
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
+    def on_call(self, to_frame, from_frame):
+        try:
+            t = self.tf_buffer.lookup_transform(to_frame, from_frame, rclpy.time.Time(),
+                                                timeout=rclpy.duration.Duration(seconds=.001))
+        except (LookupException, ConnectivityException, ExtrapolationException):
+            self.get_logger().info('transform not ready ')
+            t = None
+        return t
 
 
 if __name__ == '__main__':
     rclpy.init()
-    mapper = Mapper(map_size=[[-10, 10], [-10, 10]], grid_size=0.05, z_max=3.4, n_beams=360, angle_range=[0, 2*np.pi],
-                    p_occ=0.9, p_free=0.4)
+    mapper = Mapper(map_size=[[-5, 5], [-5, 5]], grid_size=0.05, z_max=3.4, n_beams=360, angle_range=[0, 2*np.pi],
+                    p_occ=0.95, p_free=0.4)
     
