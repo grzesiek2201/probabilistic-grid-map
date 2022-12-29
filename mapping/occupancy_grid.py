@@ -2,9 +2,7 @@ import scipy.io
 import scipy.stats
 import numpy as np
 import matplotlib.pyplot as plt
-# from tqdm import tqdm
 import json
-# import pandas as pd
 
 from functools import wraps
 from time import perf_counter
@@ -39,10 +37,9 @@ class OccupancyGridMap:
         self.grid_size = grid_size
         self.odds_map = np.zeros((int((self.xrange[1]-self.xrange[0])/self.grid_size), 
                                   int((self.yrange[1]-self.yrange[0])/self.grid_size)), dtype=np.float64)
-        print(f"{self.xrange =}")
-        print(f"{self.yrange = }")
+
         self.n_beams = n_beams
-        self.z_max = 3.4#z_max
+        self.z_max = z_max
         self.alpha = 2 * self.grid_size
         self.beta = 2 * np.pi / self.n_beams
         
@@ -52,15 +49,6 @@ class OccupancyGridMap:
 
         self.l_occ = np.log(p_occ/p_free)
         self.l_free = np.log(p_free/p_occ)
-        
-        self.m_grid = self.construct()
-        
-    def construct(self):
-        x = np.arange(self.xrange[0], self.xrange[1]+self.grid_size, self.grid_size)
-        y = np.arange(self.yrange[0], self.yrange[1]+self.grid_size, self.grid_size)
-        X, Y = np.meshgrid(x, y)
-        t = np.array([X, Y])
-        return t
 
     def sanitize(self, data):
         data = np.array(data).astype(np.float64)
@@ -69,65 +57,6 @@ class OccupancyGridMap:
         data[(data > self.z_max)] = -1.0
         data = data[~np.isnan(data)]
         return data
-    
-    #@timeit
-    def update_map(self, pose, scan_data):
-        
-        scan_data = self.sanitize(scan_data)
-
-        pose = scaner_pos_correction(pose, self.sensor_offset)
-
-        pose[2] = pose[2]*np.pi/180
-        dx = self.m_grid.copy() # A tensor of coordinates of all cells
-        dx[0, :, :] -= pose[0] # A matrix of all the x coordinates of the cell
-        dx[1, :, :] -= pose[1] # A matrix of all the y coordinates of the cell
-        theta_to_grid = np.arctan2(dx[1, :, :], dx[0, :, :]) - pose[2] # matrix of all bearings from robot to cell
-
-        theta_to_grid[theta_to_grid > np.pi] -= 2. * np.pi
-        theta_to_grid[theta_to_grid <= -np.pi] += 2. * np.pi
-        
-        dist_to_grid = np.linalg.norm(dx, axis=0) # matrix of L2 distance to all cells from robot
-    
-        angle_measured = np.linspace(-np.pi/2, np.pi/2, self.n_beams)
-        for scan in zip(scan_data, angle_measured):  # for each laser beam
-            z = scan[0]
-            b = scan[1]
-            free_mask = (np.abs(theta_to_grid - b) <= self.beta/2.0) & (dist_to_grid < (z - self.alpha/2.0))
-            occupied_mask = (np.abs(theta_to_grid - b) <= self.beta/2.0) & (np.abs(dist_to_grid - z) <= self.alpha/2.0)
-    
-            # Adjust the cells appropriately
-            self.odds_map[occupied_mask] += self.l_occ
-            self.odds_map[free_mask] += self.l_free
-
-        return dx, theta_to_grid, occupied_mask
-
-    @timeit
-    def live_update_map(self, pose, scan_data):
-        scan_data = self.sanitize(scan_data)
-
-        dx = self.m_grid.copy() # A tensor of coordinates of all cells
-        dx[0, :, :] -= pose[0] # A matrix of all the x coordinates of the cell
-        dx[1, :, :] -= pose[1] # A matrix of all the y coordinates of the cell
-        theta_to_grid = np.arctan2(dx[1, :, :], dx[0, :, :]) - pose[2] # matrix of all bearings from robot to cell
-
-        theta_to_grid[theta_to_grid < 0] += 2. * np.pi
-        
-        dist_to_grid = np.linalg.norm(dx, axis=0) # matrix of L2 distance to all cells from robot
-
-        angle_measured = np.linspace(self.angle_range[0], self.angle_range[1], self.n_beams)
-        for scan in zip(scan_data, angle_measured):  # for each laser beam
-            z = scan[0]
-            b = scan[1] 
-            free_mask = (np.abs(theta_to_grid - b) <= self.beta/2.0) & (dist_to_grid < (z - self.alpha/2.0))
-            occupied_mask = (np.abs(theta_to_grid - b) <= self.beta/2.0) & (np.abs(dist_to_grid - z) <= self.alpha/2.0)
-    
-            # Adjust the cells appropriately
-            self.odds_map[occupied_mask] += self.l_occ
-            self.odds_map[free_mask] += self.l_free
-
-        # plt.clf()
-        # plt.imshow(1.0 - 1./(1.+np.exp(self.odds_map)), 'Greys')
-        # plt.pause(0.01)
 
     @timeit
     def update(self, pose, scan_data):
@@ -138,7 +67,8 @@ class OccupancyGridMap:
         pose = scaner_pos_correction(pose, self.sensor_offset)
         
         angle_measured = np.linspace(self.angle_range[0], self.angle_range[1], self.n_beams)
-        idc = scan_data < self.z_max
+        # idc = scan_data < self.z_max  # if bad reading are represented by 'inf'
+        idc = scan_data != -1.0
         angle_measured = angle_measured[idc]
         scan_data = scan_data[idc]
 

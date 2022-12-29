@@ -22,15 +22,21 @@ class FixedFrameBroadcaster(Node):
         t.transform.translation.x = 0.0
         t.transform.translation.y = 0.0
         t.transform.translation.z = 0.0
-        t.transform.rotation.x = 0.0
-        t.transform.rotation.y = 0.0
-        t.transform.rotation.z = 0.0
-        t.transform.rotation.w = 1.0
+        t.transform.rotation.x = -0.707#0.0
+        t.transform.rotation.y = -0.707#0.0
+        t.transform.rotation.z = 0.0#-0.707
+        t.transform.rotation.w = 0.0#-0.707
 
         self.tf_broadcaster.sendTransform(t)
 
 
-if __name__ == '__main__':
+def main():
     rclpy.init()
     tf = FixedFrameBroadcaster('map_broadcaster')
     rclpy.spin(tf)
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception:
+        rclpy.shutdown()
