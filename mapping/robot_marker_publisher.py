@@ -19,7 +19,7 @@ class PoseSubscriber(Node):
         super().__init__(name)
         self.pose_subscriber = self.create_subscription(Odometry, '/ground_truth_pos', self.pose_callback, 1)
         self.publisher = publisher
-        self.marker = None
+        self.marker = Marker()
         self.create_timer(0.1, self.pose_publish)
 
     def pose_callback(self, msg):
