@@ -2,7 +2,7 @@
 
 import rclpy
 import json
-from .occupancy_grid import OccupancyGridMap
+from .occupancy_grid import OccupancyGridMap ########################
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry, OccupancyGrid
 import matplotlib.pyplot as plt
@@ -11,6 +11,7 @@ import math
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from tf2_msgs.msg import TFMessage
+import time
 
 
 def euler_from_quaternion(quaternion):
@@ -104,9 +105,15 @@ class SubscriberNode(Node):
         self.subscription_scan = self.create_subscription(LaserScan, "/scan", self.callback_scan, 1)
         self.subscription_pose = self.create_subscription(Odometry, "/ground_truth_pos", self.callback_odom, 1)
         self.parent = parent
+        self.time = time.time()
+        self.prev_time = time.time()
+        self.scan_time_rate = 0.3  # in seconds
 
     def callback_scan(self, msg):
+        # self.time = time.time()
+        # if self.time - self.prev_time > self.scan_time_rate:
         self.parent.callback_scan(msg)
+            # self.prev_time = time.time()
 
     def callback_odom(self, msg):
         self.parent.callback_update(msg)
@@ -121,9 +128,10 @@ class MapPublisher(Node):
         msg = OccupancyGrid()
         lower_bound = data > 0.45
         upper_bound = data < 0.55
-        data[lower_bound & upper_bound] = -1
-        data = data.flatten().astype(np.int8)
+        data[lower_bound & upper_bound] = -2
+        data = data.flatten()
         data = np.round(data) * 100
+        data = data.astype(np.int8)
         data = getattr(data, 'tolist', lambda:data)()
         msg.data = data
 
@@ -140,8 +148,8 @@ class MapPublisher(Node):
 
 def main():
     rclpy.init()
-    mapper = Mapper(map_size=[[-5, 5], [-5, 5]], grid_size=0.05, z_max=3.4, n_beams=360, angle_range=[0, 2*np.pi],
-                    p_occ=0.99, p_free=0.4)
+    mapper = Mapper(map_size=[[-3, 3], [-3, 3]], grid_size=0.1, z_max=3.4, n_beams=360, angle_range=[0, 2*np.pi],
+                    p_occ=0.95, p_free=0.2)
     
 
 if __name__ == '__main__':

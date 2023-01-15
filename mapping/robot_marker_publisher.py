@@ -1,7 +1,5 @@
 import rclpy
 from visualization_msgs.msg import Marker
-from geometry_msgs.msg import Pose, Point, Vector3, Quaternion
-from std_msgs.msg import ColorRGBA
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 
@@ -23,7 +21,7 @@ class PoseSubscriber(Node):
         self.create_timer(0.1, self.pose_publish)
 
     def pose_callback(self, msg):
-        self.marker = create_marker(0, msg.pose.pose, 1.0, 0.1, 0.1, r=255.0, g=5.0, b=0.0, a=1.0)
+        self.marker = create_marker(0, msg.pose.pose, .4, 0.1, 0.1, r=255.0, g=5.0, b=0.0, a=1.0)
 
     def pose_publish(self):
         # print("Publishing marker..")

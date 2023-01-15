@@ -50,6 +50,9 @@ class OccupancyGridMap:
         self.l_occ = np.log(p_occ/p_free)
         self.l_free = np.log(p_free/p_occ)
 
+        self.max_occ = 30
+        self.min_occ = -30
+
     def sanitize(self, data):
         data = np.array(data).astype(np.float64)
         inf_indeces = np.isinf(data)
@@ -85,8 +88,19 @@ class OccupancyGridMap:
             ix, iy = np.array(list(zip(*line)))
             ix, iy = ix+int(self.xrange[1]/self.grid_size), iy+int(self.yrange[1]/self.grid_size)
 
-            self.odds_map[ix[:-1], iy[:-1]] += self.l_free
-            self.odds_map[ix[-2:], iy[-2:]] += self.l_occ
+            # if self.odds_map[ix[-2:], iy[-2:]] < self.max_occ:
+            #     self.odds_map[ix[-2:], iy[-2:]] += self.l_occ
+            # if self.odds_map[ix[:-1], iy[:-1]] > self.min_occ:
+            #     self.odds_map[ix[:-1], iy[:-1]] += self.l_free
+
+            self.odds_map[ix[:-2], iy[:-2]] += self.l_free
+            self.odds_map[ix[-1], iy[-1]] += self.l_occ
+
+            maxxed = self.odds_map > self.max_occ
+            minned = self.odds_map < self.min_occ
+            self.odds_map[maxxed] = self.max_occ
+            self.odds_map[minned] = self.min_occ
+            # print(maxxed)
 
 
 def scaner_pos_correction(middle_position:np.ndarray, offset:np.ndarray) -> np.ndarray:
