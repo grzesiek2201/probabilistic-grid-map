@@ -1,5 +1,5 @@
-# mapping
-ROS2 mapping with Gazebo and Rviz2.
+# probabilistic grid map
+Creating probabilistic grid map in ROS2 with Gazebo and Rviz2.
 
 Probabilistic Grid Map built based on sensor data from turtlebot3 burger model. Map is being published to /map topic and visualised in Rviz2 with pose of the robot.
 
